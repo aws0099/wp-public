@@ -230,8 +230,10 @@ async function initAuth() {
 // ─── State Variables ───────────────────────────────────────
 let activeSection = phoneSection;
 let countdownInterval = null;
-let currentCountdown = 60;
-const TOTAL_TIMEOUT = 60; // 60 seconds
+const PAIRING_TIMEOUT = 300; // 5 minutes (300 seconds)
+const QR_TIMEOUT = 60; // 60 seconds
+let activeTimeout = PAIRING_TIMEOUT;
+let currentCountdown = PAIRING_TIMEOUT;
 let isRequesting = false;
 let isLoggingOut = false;
 let currentQrDataUrl = null;
@@ -423,18 +425,28 @@ function formatUptime(seconds) {
   return parts.join(' ');
 }
 
-// ─── 60-Second Countdown Timer ────────────────────────────
+// ─── Countdown Timer (5 Minutes for Pairing Code, 60s for QR) ───
+function formatCountdown(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m > 0) {
+    return `${m}m ${s < 10 ? '0' : ''}${s}s`;
+  }
+  return `${s}s`;
+}
+
 function startCountdown(type) {
   stopCountdown();
-  currentCountdown = TOTAL_TIMEOUT;
+  activeTimeout = type === 'pairing' ? PAIRING_TIMEOUT : QR_TIMEOUT;
+  currentCountdown = activeTimeout;
 
   function updateUi() {
-    const percent = Math.max(0, (currentCountdown / TOTAL_TIMEOUT) * 100);
+    const percent = Math.max(0, (currentCountdown / activeTimeout) * 100);
     if (type === 'pairing') {
-      pairingTimerSec.textContent = `${currentCountdown}s`;
+      pairingTimerSec.textContent = formatCountdown(currentCountdown);
       pairingProgress.style.width = `${percent}%`;
     } else if (type === 'qr') {
-      qrTimerSec.textContent = `${currentCountdown}s`;
+      qrTimerSec.textContent = formatCountdown(currentCountdown);
       qrProgress.style.width = `${percent}%`;
     }
   }
@@ -447,7 +459,7 @@ function startCountdown(type) {
 
     if (currentCountdown <= 0) {
       stopCountdown();
-      console.log('Auth session timed out after 60s. Returning to phone input...');
+      console.log(`Auth session timed out after ${activeTimeout}s (${type}). Returning to phone input...`);
       await cancelAuth();
     }
   }, 1000);
